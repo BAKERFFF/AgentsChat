@@ -10,9 +10,37 @@ body {
   font-family: 'Courier New', 'Source Code Pro', monospace;
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
+}
+
+/* Scanline overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.02) 2px,
+    rgba(0,0,0,0.02) 4px
+  );
+  pointer-events: none;
+  z-index: 100;
 }
 
 #app {
   width: 100%;
   min-height: 100vh;
 }
+
+/* Selection color */
+::selection {
+  background: #e94560;
+  color: #fff;
+}
+
+/* Scrollbar global */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 2px; }
