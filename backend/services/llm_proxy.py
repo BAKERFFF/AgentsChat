@@ -43,8 +43,18 @@ class LLMProxy:
             })
 
         token_count = 0
-        # 为 DeepSeek 思考模式预留额外 token
-        api_max_tokens = min(token_limit + 200, 1000)
+        # 关闭 DeepSeek 思考模式（200 token 的简短回复不需要），
+        # 并给充足 max_tokens 防止思考 token 挤占输出配额
+        api_max_tokens = 2000
+        request_body = {
+            "model": agent.model,
+            "messages": messages,
+            "stream": True,
+            "max_tokens": api_max_tokens,
+        }
+        # DeepSeek：显式关闭思考模式
+        if "deepseek" in agent.model.lower() or "deepseek" in api_base:
+            request_body["thinking"] = {"type": "disabled"}
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
@@ -54,12 +64,7 @@ class LLMProxy:
                     "Authorization": f"Bearer {agent.api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": agent.model,
-                    "messages": messages,
-                    "stream": True,
-                    "max_tokens": api_max_tokens,
-                },
+                json=request_body,
             ) as response:
                 if response.status_code != 200:
                     body = await response.aread()
