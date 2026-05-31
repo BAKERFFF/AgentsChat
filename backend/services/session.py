@@ -18,6 +18,12 @@ class DiscussionSession:
         self.spoken_this_round: set[str] = set()
         self.created_at: float = time.time()
         self.discussion_ended: bool = False
+        # 把讨论主题作为初始消息写入历史
+        self.conversation_history.append({
+            "agent_id": "system",
+            "agent_name": "主持人",
+            "content": f"讨论主题：{topic}",
+        })
 
     def can_speak(self, agent_id: str) -> bool:
         return agent_id in self.agents and agent_id not in self.spoken_this_round

@@ -36,12 +36,15 @@ class LLMProxy:
         messages = [{"role": "system", "content": system_prompt}]
 
         for entry in conversation_history[-20:]:
+            role = "user" if entry["agent_id"] == "system" else "assistant"
             messages.append({
-                "role": "assistant",
+                "role": role,
                 "content": f"[{entry['agent_name']}]: {entry['content']}",
             })
 
         token_count = 0
+        # 为 DeepSeek 思考模式预留额外 token
+        api_max_tokens = min(token_limit + 200, 1000)
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
@@ -55,7 +58,7 @@ class LLMProxy:
                     "model": agent.model,
                     "messages": messages,
                     "stream": True,
-                    "max_tokens": min(token_limit, 300),
+                    "max_tokens": api_max_tokens,
                 },
             ) as response:
                 if response.status_code != 200:
@@ -72,6 +75,7 @@ class LLMProxy:
                         data = json.loads(data_str)
                         delta = data.get("choices", [{}])[0].get("delta", {})
                         content = delta.get("content", "")
+                        # 跳过 DeepSeek 的思考过程文本，只取实际回复
                         if content:
                             token_count += 1
                             if token_count > token_limit:
