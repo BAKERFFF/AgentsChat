@@ -18,20 +18,31 @@
       </button>
     </div>
     <div style="flex:1;"></div>
+    <!-- 结论阶段：按钮变为“讨论完毕” -->
     <button
-      class="action-btn"
+      v-if="isLastPhase"
+      class="action-btn finish"
       :disabled="!canNextRound"
-      @click="$emit('next-round')"
-    >
-      下一轮 ⟶
-    </button>
-    <button
-      v-if="!isLastPhase"
-      class="action-btn green"
       @click="$emit('next-phase')"
     >
-      进入下一阶段 →
+      讨论完毕 ✓
     </button>
+    <!-- 非结论阶段：下一轮 + 进入下一阶段 -->
+    <template v-else>
+      <button
+        class="action-btn"
+        :disabled="!canNextRound"
+        @click="$emit('next-round')"
+      >
+        下一轮 ⟶
+      </button>
+      <button
+        class="action-btn green"
+        @click="$emit('next-phase')"
+      >
+        进入下一阶段 →
+      </button>
+    </template>
   </div>
 </template>
 
@@ -103,5 +114,14 @@ const canNextRound = computed(() => {
 .action-btn.green:hover {
   background: linear-gradient(135deg, #50d890, #28a050);
   box-shadow: 0 0 24px rgba(80,216,144,0.4);
+}
+.action-btn.finish {
+  border-color: #ffcc00;
+  background: linear-gradient(135deg, rgba(255,204,0,0.8), rgba(233,160,64,0.6));
+}
+.action-btn.finish:hover {
+  background: linear-gradient(135deg, #ffcc00, #e9a040);
+  box-shadow: 0 0 24px rgba(255,204,0,0.5);
+  transform: translateY(-1px);
 }
 </style>
