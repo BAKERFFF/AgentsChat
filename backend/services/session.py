@@ -23,6 +23,8 @@ class DiscussionSession:
             "agent_id": "system",
             "agent_name": "主持人",
             "content": f"讨论主题：{topic}",
+            "round": 0,
+            "is_phase_marker": False,
         })
 
     def can_speak(self, agent_id: str) -> bool:
@@ -50,7 +52,30 @@ class DiscussionSession:
             "agent_id": agent_id,
             "agent_name": agent.name,
             "content": content,
+            "round": self.current_round,
+            "is_phase_marker": False,
         })
+
+    def record_phase_marker(self, phase_index: int, phase_name: str) -> None:
+        """Record a phase transition in conversation history so models know context changed."""
+        self.conversation_history.append({
+            "agent_id": "system",
+            "agent_name": "系统",
+            "content": f"【进入新阶段：{phase_name}】请基于之前的全部讨论历史，以新阶段的视角继续发言。",
+            "round": 0,
+            "is_phase_marker": True,
+        })
+
+    def get_current_round_messages(self) -> list[dict]:
+        """Get messages from the current round (excluding system/markers)."""
+        return [
+            m for m in self.conversation_history
+            if m["round"] == self.current_round and not m.get("is_phase_marker") and m["agent_id"] != "system"
+        ]
+
+    def is_last_speaker(self) -> bool:
+        """Check if the next speaker will be the last one in this round."""
+        return len(self.spoken_this_round) == len(self.agents) - 1
 
     def is_expired(self, timeout_seconds: int = 300) -> bool:
         return time.time() - self.created_at > timeout_seconds

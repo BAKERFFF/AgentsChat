@@ -105,7 +105,33 @@ async def handle_select_speaker(websocket: WebSocket, session_id: str | None, ms
         return
 
     agent = session.agents[agent_id]
-    phase_prompt = AgendaEngine.get_system_prompt(session.current_phase, agent.name)
+
+    # === 第三个（最后一个）发言者：对比总结模式 ===
+    is_last = session.is_last_speaker()
+    if is_last:
+        # 获取本轮已发言的 agent 的回复
+        current_round_msgs = session.get_current_round_messages()
+        previous_responses = "\n\n".join([
+            f"【{m['agent_name']}的观点】:\n{m['content']}"
+            for m in current_round_msgs
+        ])
+
+        phase_prompt = f"""{AgendaEngine.get_base_prompt(session.current_phase)}
+
+【重要：你是本轮最后一位发言者】
+在你之前，其他参与者已经发表了以下观点：
+
+{previous_responses}
+
+请你完成以下任务：
+1. 对比分析以上观点的核心异同和分歧点
+2. 指出各方观点的优势与不足
+3. 在此基础上，给出你自己的独立判断和补充见解
+4. 不要简单重复前人的观点，要提供新的价值
+
+你的名字是{agent.name}。发言精练，不超过200 tokens。"""
+    else:
+        phase_prompt = AgendaEngine.get_system_prompt(session.current_phase, agent.name)
 
     await websocket.send_json({
         "type": ServerMsgType.AGENT_TYPING,
@@ -148,7 +174,13 @@ async def handle_select_speaker(websocket: WebSocket, session_id: str | None, ms
     })
 
     if session.all_spoken():
-        round_summary = f"第{session.current_round}轮完成，所有agent已发言。"
+        phase = AgendaEngine.get_phase(session.current_phase)
+        if session.current_phase == 0:
+            round_summary = f"第{session.current_round}轮分析完成。建议至少进行2-3轮分析后再进入讨论阶段。"
+        elif session.current_phase == 1:
+            round_summary = f"第{session.current_round}轮讨论完成。"
+        else:
+            round_summary = f"第{session.current_round}轮总结完成，讨论即将结束。"
         await websocket.send_json({
             "type": ServerMsgType.ROUND_COMPLETE,
             "round_summary": round_summary,
@@ -193,16 +225,21 @@ async def handle_next_phase(websocket: WebSocket, session_id: str | None) -> Non
         session.discussion_ended = True
         return
 
+    old_phase = AgendaEngine.get_phase(session.current_phase)
     session.current_phase = next_index
     session.spoken_this_round.clear()
     session.current_round = 1
 
-    phase = AgendaEngine.get_phase(next_index)
+    new_phase = AgendaEngine.get_phase(next_index)
+
+    # === 在对话历史中记录阶段切换 ===
+    session.record_phase_marker(next_index, new_phase.name)
+
     await websocket.send_json({
         "type": ServerMsgType.PHASE_STARTED,
         "phase": next_index,
-        "phase_name": phase.name,
-        "system_prompt_hint": phase.system_prompt[:100],
+        "phase_name": new_phase.name,
+        "system_prompt_hint": new_phase.system_prompt[:100],
     })
     await send_round_status(websocket, session)
 

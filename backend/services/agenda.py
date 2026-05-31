@@ -60,6 +60,11 @@ class AgendaEngine:
         return index >= len(PHASES) - 1
 
     @staticmethod
+    def get_base_prompt(phase_index: int) -> str:
+        """Get the phase system prompt without agent name."""
+        return AgendaEngine.get_phase(phase_index).system_prompt
+
+    @staticmethod
     def get_system_prompt(phase_index: int, agent_name: str) -> str:
         phase = AgendaEngine.get_phase(phase_index)
-        return f"{phase.system_prompt}\n你的名字是{agent_name}。当前讨论主题将通过对话历史给出。"
+        return f"{phase.system_prompt}\n你的名字是{agent_name}。当前讨论主题和完整对话历史已提供。"
