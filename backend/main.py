@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
+from ws.chat import handle_chat
 
 app = FastAPI(title="AgentsChat")
 
@@ -20,6 +21,4 @@ async def health():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    await websocket.send_json({"type": "hello"})
-    await websocket.close()
+    await handle_chat(websocket)
