@@ -109,25 +109,17 @@ async def handle_select_speaker(websocket: WebSocket, session_id: str | None, ms
     # === 第三个（最后一个）发言者：对比总结模式 ===
     is_last = session.is_last_speaker()
     if is_last:
-        # 获取本轮已发言的 agent 的回复
+        # 只引用前两位的名字，不重复复制内容（内容已在对话历史中）
         current_round_msgs = session.get_current_round_messages()
-        previous_responses = "\n\n".join([
-            f"【{m['agent_name']}的观点】:\n{m['content']}"
-            for m in current_round_msgs
-        ])
+        prev_names = "、".join([m['agent_name'] for m in current_round_msgs])
 
         phase_prompt = f"""{AgendaEngine.get_base_prompt(session.current_phase)}
 
-【重要：你是本轮最后一位发言者】
-在你之前，其他参与者已经发表了以下观点：
-
-{previous_responses}
-
-请你完成以下任务：
-1. 对比分析以上观点的核心异同和分歧点
-2. 指出各方观点的优势与不足
-3. 在此基础上，给出你自己的独立判断和补充见解
-4. 不要简单重复前人的观点，要提供新的价值
+【你是本轮最后一位发言者】
+{prev_names} 已经发表了观点（详见对话历史）。请你：
+1. 对比 {prev_names} 的观点，指出核心异同和分歧
+2. 给出你自己的独立判断和补充见解
+3. 不要重复前人已说的内容
 
 你的名字是{agent.name}。发言精练，不超过200 tokens。"""
     else:
@@ -138,6 +130,8 @@ async def handle_select_speaker(websocket: WebSocket, session_id: str | None, ms
         "agent_id": agent_id,
         "agent_name": agent.name,
     })
+
+    print(f"[DEBUG] Agent '{agent.name}' speaking, is_last={is_last}, prompt_len={len(phase_prompt)}")
 
     full_text = ""
     token_count = 0
@@ -156,12 +150,17 @@ async def handle_select_speaker(websocket: WebSocket, session_id: str | None, ms
                 "token_text": token,
             })
     except Exception as e:
+        print(f"[ERROR] Agent '{agent.name}' LLM call failed: {e}")
         await websocket.send_json({
             "type": ServerMsgType.ERROR,
             "code": "LLM_ERROR",
             "detail": f"Agent '{agent.name}' call failed: {str(e)}",
         })
         return
+
+    print(f"[DEBUG] Agent '{agent.name}' done, tokens={token_count}, text_len={len(full_text)}")
+    if not full_text.strip():
+        print(f"[WARN] Agent '{agent.name}' returned empty response!")
 
     session.record_message(agent_id, full_text)
     session.mark_spoken(agent_id)

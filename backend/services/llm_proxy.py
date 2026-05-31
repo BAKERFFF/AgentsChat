@@ -43,8 +43,7 @@ class LLMProxy:
             })
 
         token_count = 0
-        # 关闭 DeepSeek 思考模式（200 token 的简短回复不需要），
-        # 并给充足 max_tokens 防止思考 token 挤占输出配额
+        # 给充足的 max_tokens，只靠代码层做 200 token 截断
         api_max_tokens = 2000
         request_body = {
             "model": agent.model,
@@ -52,11 +51,14 @@ class LLMProxy:
             "stream": True,
             "max_tokens": api_max_tokens,
         }
-        # DeepSeek：显式关闭思考模式
+        # DeepSeek：关闭思考模式
         if "deepseek" in agent.model.lower() or "deepseek" in api_base:
             request_body["thinking"] = {"type": "disabled"}
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        print(f"[LLM] Calling {agent.model} at {api_base}, "
+              f"system_prompt_len={len(system_prompt)}, history_entries={len(conversation_history)}")
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST",
                 f"{api_base}/chat/completions",
@@ -68,7 +70,8 @@ class LLMProxy:
             ) as response:
                 if response.status_code != 200:
                     body = await response.aread()
-                    raise Exception(f"LLM API error {response.status_code}: {body.decode()}")
+                    print(f"[LLM ERROR] {response.status_code}: {body.decode()[:500]}")
+                    raise Exception(f"LLM API error {response.status_code}")
 
                 async for line in response.aiter_lines():
                     if not line.startswith("data: "):
@@ -80,7 +83,6 @@ class LLMProxy:
                         data = json.loads(data_str)
                         delta = data.get("choices", [{}])[0].get("delta", {})
                         content = delta.get("content", "")
-                        # 跳过 DeepSeek 的思考过程文本，只取实际回复
                         if content:
                             token_count += 1
                             if token_count > token_limit:
@@ -109,7 +111,7 @@ class LLMProxy:
 
         token_count = 0
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST",
                 "https://api.anthropic.com/v1/messages",
@@ -122,7 +124,7 @@ class LLMProxy:
                     "model": agent.model,
                     "system": system_prompt,
                     "messages": messages,
-                    "max_tokens": min(token_limit, 300),
+                    "max_tokens": 2000,
                     "stream": True,
                 },
             ) as response:
